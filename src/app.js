@@ -1,7 +1,13 @@
-const port = process.env.PORT ?? 3000;
-const environment = process.env.NODE_ENV ?? "development";
+import express from "express";
 
-console.log(`URL shortener initialized.`);
-console.log(`Environment: ${environment}`);
-console.log(`Port: ${port}`);
+const app = express();
+const port = process.env.PORT ?? 3000;
+
+app.get("/health", (request, response) => {
+	response.json({ status: "ok" });
+});
+
+app.listen(port, () => {
+	console.log(`Server listening on port ${port}`);
+});
 

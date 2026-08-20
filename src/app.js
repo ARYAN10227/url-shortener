@@ -16,6 +16,42 @@ let mongoClient;
 
 app.use(express.json());
 
+function authenticateRequest(request, response, next) {
+	const authorizationHeader = request.headers.authorization;
+
+	if (!authorizationHeader) {
+		return response.status(401).json({
+			error: "Authorization token is required.",
+		});
+	}
+
+	const [scheme, token] = authorizationHeader.split(" ");
+
+	if (scheme !== "Bearer" || !token) {
+		return response.status(401).json({
+			error: "Authorization token is required.",
+		});
+	}
+
+	const jwtSecret = process.env.JWT_SECRET;
+
+	if (!jwtSecret) {
+		return response.status(500).json({
+			error: "JWT_SECRET is not set.",
+		});
+	}
+
+	try {
+		const payload = jwt.verify(token, jwtSecret);
+		request.userId = payload.userId;
+		return next();
+	} catch (error) {
+		return response.status(401).json({
+			error: "Invalid or expired token.",
+		});
+	}
+}
+
 app.get("/health", (request, response) => {
 	response.json({ status: "ok" });
 });
@@ -99,6 +135,12 @@ app.post("/api/auth/login", async (request, response) => {
 			error: "Login failed.",
 		});
 	}
+});
+
+app.get("/api/auth/me", authenticateRequest, (request, response) => {
+	return response.status(200).json({
+		userId: request.userId,
+	});
 });
 
 async function startServer() {

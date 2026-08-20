@@ -9,6 +9,11 @@ import {
 	normalizeEmail,
 	verifyPassword,
 } from "./user.js";
+import {
+	createUrl,
+	generateShortCode,
+	isValidHttpUrl,
+} from "./url.js";
 
 const app = express();
 const port = process.env.PORT ?? 3000;
@@ -140,6 +145,47 @@ app.post("/api/auth/login", async (request, response) => {
 app.get("/api/auth/me", authenticateRequest, (request, response) => {
 	return response.status(200).json({
 		userId: request.userId,
+	});
+});
+
+app.post("/api/urls", authenticateRequest, async (request, response) => {
+	const { originalUrl } = request.body ?? {};
+
+	if (!originalUrl || !isValidHttpUrl(String(originalUrl))) {
+		return response.status(400).json({
+			error: "originalUrl must be a valid http or https URL.",
+		});
+	}
+
+	const client = mongoClient ?? (await connectToMongoDb());
+	const baseUrl = `${request.protocol}://${request.get("host")}`;
+
+	for (let attempt = 0; attempt < 5; attempt += 1) {
+		const shortCode = generateShortCode();
+
+		try {
+			await createUrl(client, {
+				userId: request.userId,
+				originalUrl: String(originalUrl),
+				shortCode,
+			});
+
+			return response.status(201).json({
+				shortCode,
+				shortUrl: `${baseUrl}/${shortCode}`,
+			});
+		} catch (error) {
+			if (error?.code !== 11000) {
+				console.error("URL creation failed:", error.message);
+				return response.status(500).json({
+					error: "URL creation failed.",
+				});
+			}
+		}
+	}
+
+	return response.status(500).json({
+		error: "Could not generate a unique short code.",
 	});
 });
 

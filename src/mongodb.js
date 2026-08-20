@@ -10,7 +10,7 @@ export async function connectToMongoDb() {
 	}
 
 	if (!client) {
-		client = new MongoClient(uri);
+		client = new MongoClient(uri, { family: 4 });
 	}
 
 	await client.connect();

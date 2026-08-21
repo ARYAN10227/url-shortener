@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { ObjectId } from "mongodb";
 
 const SHORT_CODE_LENGTH = 8;
 const CUSTOM_ALIAS_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -55,4 +56,29 @@ export async function findUrlsByUserId(client, userId) {
 		.find({ userId })
 		.sort({ createdAt: -1 })
 		.toArray();
+}
+
+export async function findUrlById(client, id) {
+	if (!ObjectId.isValid(id)) {
+		return null;
+	}
+
+	const urls = await getUrlsCollection(client);
+	return urls.findOne({ _id: new ObjectId(id) });
+}
+
+export async function updateUrl(client, id, originalUrl) {
+	const urls = await getUrlsCollection(client);
+
+	return urls.findOneAndUpdate(
+		{ _id: new ObjectId(id) },
+		{ $set: { originalUrl, updatedAt: new Date() } },
+		{ returnDocument: "after" },
+	);
+}
+
+export async function deleteUrl(client, id) {
+	const urls = await getUrlsCollection(client);
+
+	return urls.deleteOne({ _id: new ObjectId(id) });
 }

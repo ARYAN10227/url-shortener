@@ -11,11 +11,14 @@ import {
 } from "./user.js";
 import {
 	createUrl,
+	deleteUrl,
+	findUrlById,
 	generateShortCode,
 	findUrlByShortCode,
 	findUrlsByUserId,
 	isValidHttpUrl,
 	isValidCustomAlias,
+	updateUrl,
 } from "./url.js";
 
 const app = express();
@@ -157,6 +160,64 @@ app.get("/api/urls", authenticateRequest, async (request, response) => {
 
 	return response.status(200).json({
 		urls,
+	});
+});
+
+app.patch("/api/urls/:id", authenticateRequest, async (request, response) => {
+	const { originalUrl } = request.body ?? {};
+
+	if (!originalUrl || !isValidHttpUrl(String(originalUrl))) {
+		return response.status(400).json({
+			error: "originalUrl must be a valid http or https URL.",
+		});
+	}
+
+	const client = mongoClient ?? (await connectToMongoDb());
+	const url = await findUrlById(client, request.params.id);
+
+	if (!url) {
+		return response.status(404).json({
+			error: "URL not found.",
+		});
+	}
+
+	if (url.userId !== request.userId) {
+		return response.status(403).json({
+			error: "You do not own this URL.",
+		});
+	}
+
+	const updatedUrl = await updateUrl(
+		client,
+		request.params.id,
+		String(originalUrl),
+	);
+
+	return response.status(200).json({
+		url: updatedUrl,
+	});
+});
+
+app.delete("/api/urls/:id", authenticateRequest, async (request, response) => {
+	const client = mongoClient ?? (await connectToMongoDb());
+	const url = await findUrlById(client, request.params.id);
+
+	if (!url) {
+		return response.status(404).json({
+			error: "URL not found.",
+		});
+	}
+
+	if (url.userId !== request.userId) {
+		return response.status(403).json({
+			error: "You do not own this URL.",
+		});
+	}
+
+	await deleteUrl(client, request.params.id);
+
+	return response.status(200).json({
+		message: "URL deleted successfully.",
 	});
 });
 

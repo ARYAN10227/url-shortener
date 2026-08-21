@@ -24,6 +24,7 @@ import {
 	findUrlsByUserId,
 	isValidHttpUrl,
 	isValidCustomAlias,
+	isValidUrlId,
 	updateUrl,
 	updateUrlStatus,
 } from "./url.js";
@@ -76,6 +77,12 @@ app.get("/health", (request, response) => {
 });
 
 app.post("/api/auth/register", async (request, response) => {
+	if (!request.body || typeof request.body !== "object" || Array.isArray(request.body)) {
+		return response.status(400).json({
+			error: "Request body must be a JSON object.",
+		});
+	}
+
 	const { email, password } = request.body ?? {};
 
 	if (!email || !password) {
@@ -113,6 +120,12 @@ app.post("/api/auth/register", async (request, response) => {
 });
 
 app.post("/api/auth/login", async (request, response) => {
+	if (!request.body || typeof request.body !== "object" || Array.isArray(request.body)) {
+		return response.status(400).json({
+			error: "Request body must be a JSON object.",
+		});
+	}
+
 	const { email, password } = request.body ?? {};
 
 	if (!email || !password) {
@@ -194,6 +207,18 @@ app.get("/api/urls", authenticateRequest, async (request, response) => {
 });
 
 app.patch("/api/urls/:id", authenticateRequest, async (request, response) => {
+	if (!isValidUrlId(request.params.id)) {
+		return response.status(400).json({
+			error: "URL ID must be a valid MongoDB ID.",
+		});
+	}
+
+	if (!request.body || typeof request.body !== "object" || Array.isArray(request.body)) {
+		return response.status(400).json({
+			error: "Request body must be a JSON object.",
+		});
+	}
+
 	const { originalUrl } = request.body ?? {};
 
 	if (!originalUrl || !isValidHttpUrl(String(originalUrl))) {
@@ -230,6 +255,12 @@ app.patch("/api/urls/:id", authenticateRequest, async (request, response) => {
 });
 
 app.delete("/api/urls/:id", authenticateRequest, async (request, response) => {
+	if (!isValidUrlId(request.params.id)) {
+		return response.status(400).json({
+			error: "URL ID must be a valid MongoDB ID.",
+		});
+	}
+
 	const client = mongoClient ?? (await connectToMongoDb());
 	const url = await findUrlById(client, request.params.id);
 
@@ -257,6 +288,18 @@ app.patch(
 	"/api/urls/:id/status",
 	authenticateRequest,
 	async (request, response) => {
+		if (!isValidUrlId(request.params.id)) {
+			return response.status(400).json({
+				error: "URL ID must be a valid MongoDB ID.",
+			});
+		}
+
+		if (!request.body || typeof request.body !== "object" || Array.isArray(request.body)) {
+			return response.status(400).json({
+				error: "Request body must be a JSON object.",
+			});
+		}
+
 		const { enabled } = request.body ?? {};
 
 		if (typeof enabled !== "boolean") {
@@ -299,6 +342,12 @@ app.get(
 	"/api/urls/:id/analytics",
 	authenticateRequest,
 	async (request, response) => {
+		if (!isValidUrlId(request.params.id)) {
+			return response.status(400).json({
+				error: "URL ID must be a valid MongoDB ID.",
+			});
+		}
+
 		const client = mongoClient ?? (await connectToMongoDb());
 		const url = await findUrlById(client, request.params.id);
 
@@ -326,6 +375,12 @@ app.get(
 	"/api/urls/:id/analytics/summary",
 	authenticateRequest,
 	async (request, response) => {
+		if (!isValidUrlId(request.params.id)) {
+			return response.status(400).json({
+				error: "URL ID must be a valid MongoDB ID.",
+			});
+		}
+
 		const client = mongoClient ?? (await connectToMongoDb());
 		const url = await findUrlById(client, request.params.id);
 
@@ -407,6 +462,12 @@ app.get("/:shortCode", async (request, response) => {
 });
 
 app.post("/api/urls", authenticateRequest, async (request, response) => {
+	if (!request.body || typeof request.body !== "object" || Array.isArray(request.body)) {
+		return response.status(400).json({
+			error: "Request body must be a JSON object.",
+		});
+	}
+
 	const { originalUrl, customAlias, expiresAt } = request.body ?? {};
 
 	if (!originalUrl || !isValidHttpUrl(String(originalUrl))) {
@@ -472,6 +533,19 @@ app.post("/api/urls", authenticateRequest, async (request, response) => {
 
 	return response.status(500).json({
 		error: "Could not generate a unique short code.",
+	});
+});
+
+app.use((error, request, response, next) => {
+	if (error instanceof SyntaxError && error.status === 400 && "body" in error) {
+		return response.status(400).json({
+			error: "Request body must contain valid JSON.",
+		});
+	}
+
+	console.error("Unexpected request error:", error.message);
+	return response.status(500).json({
+		error: "Internal server error.",
 	});
 });
 

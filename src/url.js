@@ -71,12 +71,12 @@ export async function findUrlsByUserId(client, userId, { skip, limit }) {
 }
 
 export async function findUrlById(client, id) {
-	if (!ObjectId.isValid(id)) {
-		return null;
-	}
-
 	const urls = await getUrlsCollection(client);
 	return urls.findOne({ _id: new ObjectId(id) });
+}
+
+export function isValidUrlId(id) {
+	return ObjectId.isValid(id);
 }
 
 export async function updateUrl(client, id, originalUrl) {

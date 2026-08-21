@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import helmet from "helmet";
 import jwt from "jsonwebtoken";
 import {
 	findClicksByShortCode,
@@ -34,6 +35,8 @@ const port = process.env.PORT ?? 3000;
 let mongoClient;
 const REDIRECT_CACHE_TTL_SECONDS = 3600;
 
+app.disable("x-powered-by");
+app.use(helmet());
 app.use(express.json());
 
 function authenticateRequest(request, response, next) {
@@ -551,6 +554,10 @@ app.use((error, request, response, next) => {
 
 async function startServer() {
 	try {
+		if (!process.env.JWT_SECRET) {
+			throw new Error("JWT_SECRET is not set.");
+		}
+
 		mongoClient = await connectToMongoDb();
 		await connectToRedis();
 
@@ -558,7 +565,7 @@ async function startServer() {
 			console.log(`Server listening on port ${port}`);
 		});
 	} catch (error) {
-		console.error("MongoDB connection failed:", error.message);
+		console.error("Server startup failed:", error.message);
 		process.exit(1);
 	}
 }

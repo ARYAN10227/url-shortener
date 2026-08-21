@@ -573,5 +573,9 @@ async function startServer() {
 	}
 }
 
-startServer();
+if (process.env.NODE_ENV !== "test") {
+	startServer();
+}
+
+export { app };
 

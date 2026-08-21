@@ -12,6 +12,7 @@ import {
 import {
 	createUrl,
 	generateShortCode,
+	findUrlByShortCode,
 	isValidHttpUrl,
 } from "./url.js";
 
@@ -146,6 +147,27 @@ app.get("/api/auth/me", authenticateRequest, (request, response) => {
 	return response.status(200).json({
 		userId: request.userId,
 	});
+});
+
+app.get("/:shortCode", async (request, response) => {
+	const { shortCode } = request.params;
+
+	if (!shortCode) {
+		return response.status(404).json({
+			error: "Short URL not found.",
+		});
+	}
+
+	const client = mongoClient ?? (await connectToMongoDb());
+	const url = await findUrlByShortCode(client, shortCode);
+
+	if (!url) {
+		return response.status(404).json({
+			error: "Short URL not found.",
+		});
+	}
+
+	return response.redirect(302, url.originalUrl);
 });
 
 app.post("/api/urls", authenticateRequest, async (request, response) => {

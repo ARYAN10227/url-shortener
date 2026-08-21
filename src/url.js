@@ -36,3 +36,9 @@ export async function createUrl(client, { userId, originalUrl, shortCode }) {
 		updatedAt: now,
 	});
 }
+
+export async function findUrlByShortCode(client, shortCode) {
+	const urls = await getUrlsCollection(client);
+
+	return urls.findOne({ shortCode });
+}

@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import jwt from "jsonwebtoken";
 import { connectToMongoDb } from "./mongodb.js";
+import redisClient, { connectToRedis } from "./redis.js";
 import {
 	createUser,
 	findUserByEmail,
@@ -25,6 +26,7 @@ import {
 const app = express();
 const port = process.env.PORT ?? 3000;
 let mongoClient;
+const REDIRECT_CACHE_TTL_SECONDS = 3600;
 
 app.use(express.json());
 
@@ -215,6 +217,7 @@ app.patch("/api/urls/:id", authenticateRequest, async (request, response) => {
 		request.params.id,
 		String(originalUrl),
 	);
+	await redisClient.del(`url:${url.shortCode}`);
 
 	return response.status(200).json({
 		url: updatedUrl,
@@ -238,6 +241,7 @@ app.delete("/api/urls/:id", authenticateRequest, async (request, response) => {
 	}
 
 	await deleteUrl(client, request.params.id);
+	await redisClient.del(`url:${url.shortCode}`);
 
 	return response.status(200).json({
 		message: "URL deleted successfully.",
@@ -276,6 +280,9 @@ app.patch(
 			request.params.id,
 			enabled,
 		);
+		if (!enabled) {
+			await redisClient.del(`url:${url.shortCode}`);
+		}
 
 		return response.status(200).json({
 			url: updatedUrl,
@@ -292,6 +299,12 @@ app.get("/:shortCode", async (request, response) => {
 		});
 	}
 
+	const cachedOriginalUrl = await redisClient.get(`url:${shortCode}`);
+
+	if (cachedOriginalUrl) {
+		return response.redirect(302, cachedOriginalUrl);
+	}
+
 	const client = mongoClient ?? (await connectToMongoDb());
 	const url = await findUrlByShortCode(client, shortCode);
 
@@ -304,6 +317,20 @@ app.get("/:shortCode", async (request, response) => {
 	if (url.enabled === false || (url.expiresAt && url.expiresAt <= new Date())) {
 		return response.status(404).json({
 			error: "Short URL not found.",
+		});
+	}
+
+	const remainingLifetimeSeconds = url.expiresAt
+		? Math.ceil((url.expiresAt.getTime() - Date.now()) / 1000)
+		: REDIRECT_CACHE_TTL_SECONDS;
+	const cacheTtlSeconds = Math.min(
+		REDIRECT_CACHE_TTL_SECONDS,
+		remainingLifetimeSeconds,
+	);
+
+	if (cacheTtlSeconds > 0) {
+		await redisClient.set(`url:${shortCode}`, url.originalUrl, {
+			EX: cacheTtlSeconds,
 		});
 	}
 
@@ -382,6 +409,7 @@ app.post("/api/urls", authenticateRequest, async (request, response) => {
 async function startServer() {
 	try {
 		mongoClient = await connectToMongoDb();
+		await connectToRedis();
 
 		app.listen(port, () => {
 			console.log(`Server listening on port ${port}`);

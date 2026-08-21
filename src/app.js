@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import jwt from "jsonwebtoken";
+import { findClicksByShortCode, recordClick } from "./analytics.js";
 import { connectToMongoDb } from "./mongodb.js";
 import redisClient, { connectToRedis } from "./redis.js";
 import {
@@ -290,6 +291,33 @@ app.patch(
 	},
 );
 
+app.get(
+	"/api/urls/:id/analytics",
+	authenticateRequest,
+	async (request, response) => {
+		const client = mongoClient ?? (await connectToMongoDb());
+		const url = await findUrlById(client, request.params.id);
+
+		if (!url) {
+			return response.status(404).json({
+				error: "URL not found.",
+			});
+		}
+
+		if (url.userId !== request.userId) {
+			return response.status(403).json({
+				error: "You do not own this URL.",
+			});
+		}
+
+		const clicks = await findClicksByShortCode(client, url.shortCode);
+
+		return response.status(200).json({
+			clicks,
+		});
+	},
+);
+
 app.get("/:shortCode", async (request, response) => {
 	const { shortCode } = request.params;
 
@@ -302,6 +330,12 @@ app.get("/:shortCode", async (request, response) => {
 	const cachedOriginalUrl = await redisClient.get(`url:${shortCode}`);
 
 	if (cachedOriginalUrl) {
+		const client = mongoClient ?? (await connectToMongoDb());
+		await recordClick(client, {
+			shortCode,
+			ipAddress: request.ip,
+			userAgent: request.get("user-agent") ?? "",
+		});
 		return response.redirect(302, cachedOriginalUrl);
 	}
 
@@ -333,6 +367,12 @@ app.get("/:shortCode", async (request, response) => {
 			EX: cacheTtlSeconds,
 		});
 	}
+
+	await recordClick(client, {
+		shortCode,
+		ipAddress: request.ip,
+		userAgent: request.get("user-agent") ?? "",
+	});
 
 	return response.redirect(302, url.originalUrl);
 });

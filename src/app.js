@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import helmet from "helmet";
 import jwt from "jsonwebtoken";
+import swaggerUi from "swagger-ui-express";
 import {
 	findClicksByShortCode,
 	recordClick,
@@ -9,6 +10,7 @@ import {
 } from "./analytics.js";
 import { connectToMongoDb } from "./mongodb.js";
 import redisClient, { connectToRedis } from "./redis.js";
+import { openapiDocument } from "./openapi.js";
 import {
 	createUser,
 	findUserByEmail,
@@ -38,6 +40,7 @@ const REDIRECT_CACHE_TTL_SECONDS = 3600;
 app.disable("x-powered-by");
 app.use(helmet());
 app.use(express.json());
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openapiDocument));
 
 function authenticateRequest(request, response, next) {
 	const authorizationHeader = request.headers.authorization;

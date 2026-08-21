@@ -47,3 +47,12 @@ export async function findUrlByShortCode(client, shortCode) {
 
 	return urls.findOne({ shortCode });
 }
+
+export async function findUrlsByUserId(client, userId) {
+	const urls = await getUrlsCollection(client);
+
+	return urls
+		.find({ userId })
+		.sort({ createdAt: -1 })
+		.toArray();
+}

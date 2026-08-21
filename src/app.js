@@ -13,6 +13,7 @@ import {
 	createUrl,
 	generateShortCode,
 	findUrlByShortCode,
+	findUrlsByUserId,
 	isValidHttpUrl,
 	isValidCustomAlias,
 } from "./url.js";
@@ -147,6 +148,15 @@ app.post("/api/auth/login", async (request, response) => {
 app.get("/api/auth/me", authenticateRequest, (request, response) => {
 	return response.status(200).json({
 		userId: request.userId,
+	});
+});
+
+app.get("/api/urls", authenticateRequest, async (request, response) => {
+	const client = mongoClient ?? (await connectToMongoDb());
+	const urls = await findUrlsByUserId(client, request.userId);
+
+	return response.status(200).json({
+		urls,
 	});
 });
 

@@ -19,6 +19,7 @@ import {
 	isValidHttpUrl,
 	isValidCustomAlias,
 	updateUrl,
+	updateUrlStatus,
 } from "./url.js";
 
 const app = express();
@@ -221,6 +222,45 @@ app.delete("/api/urls/:id", authenticateRequest, async (request, response) => {
 	});
 });
 
+app.patch(
+	"/api/urls/:id/status",
+	authenticateRequest,
+	async (request, response) => {
+		const { enabled } = request.body ?? {};
+
+		if (typeof enabled !== "boolean") {
+			return response.status(400).json({
+				error: "enabled must be a boolean.",
+			});
+		}
+
+		const client = mongoClient ?? (await connectToMongoDb());
+		const url = await findUrlById(client, request.params.id);
+
+		if (!url) {
+			return response.status(404).json({
+				error: "URL not found.",
+			});
+		}
+
+		if (url.userId !== request.userId) {
+			return response.status(403).json({
+				error: "You do not own this URL.",
+			});
+		}
+
+		const updatedUrl = await updateUrlStatus(
+			client,
+			request.params.id,
+			enabled,
+		);
+
+		return response.status(200).json({
+			url: updatedUrl,
+		});
+	},
+);
+
 app.get("/:shortCode", async (request, response) => {
 	const { shortCode } = request.params;
 
@@ -239,11 +279,17 @@ app.get("/:shortCode", async (request, response) => {
 		});
 	}
 
+	if (url.enabled === false || (url.expiresAt && url.expiresAt <= new Date())) {
+		return response.status(404).json({
+			error: "Short URL not found.",
+		});
+	}
+
 	return response.redirect(302, url.originalUrl);
 });
 
 app.post("/api/urls", authenticateRequest, async (request, response) => {
-	const { originalUrl, customAlias } = request.body ?? {};
+	const { originalUrl, customAlias, expiresAt } = request.body ?? {};
 
 	if (!originalUrl || !isValidHttpUrl(String(originalUrl))) {
 		return response.status(400).json({
@@ -255,6 +301,17 @@ app.post("/api/urls", authenticateRequest, async (request, response) => {
 		if (!customAlias || !isValidCustomAlias(String(customAlias))) {
 			return response.status(400).json({
 				error: "customAlias must contain only letters, numbers, underscores, or hyphens.",
+			});
+		}
+	}
+
+	let expirationDate;
+	if (expiresAt !== undefined) {
+		expirationDate = new Date(expiresAt);
+
+		if (Number.isNaN(expirationDate.getTime()) || expirationDate <= new Date()) {
+			return response.status(400).json({
+				error: "expiresAt must be a valid future date.",
 			});
 		}
 	}
@@ -272,6 +329,7 @@ app.post("/api/urls", authenticateRequest, async (request, response) => {
 				userId: request.userId,
 				originalUrl: String(originalUrl),
 				shortCode: codeToUse,
+				expiresAt: expirationDate,
 			});
 
 			return response.status(201).json({

@@ -30,7 +30,10 @@ export function isValidCustomAlias(value) {
 	return CUSTOM_ALIAS_PATTERN.test(value);
 }
 
-export async function createUrl(client, { userId, originalUrl, shortCode }) {
+export async function createUrl(
+	client,
+	{ userId, originalUrl, shortCode, expiresAt },
+) {
 	const urls = await getUrlsCollection(client);
 	const now = new Date();
 
@@ -38,6 +41,8 @@ export async function createUrl(client, { userId, originalUrl, shortCode }) {
 		userId,
 		shortCode,
 		originalUrl,
+		enabled: true,
+		expiresAt,
 		createdAt: now,
 		updatedAt: now,
 	});
@@ -81,4 +86,14 @@ export async function deleteUrl(client, id) {
 	const urls = await getUrlsCollection(client);
 
 	return urls.deleteOne({ _id: new ObjectId(id) });
+}
+
+export async function updateUrlStatus(client, id, enabled) {
+	const urls = await getUrlsCollection(client);
+
+	return urls.findOneAndUpdate(
+		{ _id: new ObjectId(id) },
+		{ $set: { enabled, updatedAt: new Date() } },
+		{ returnDocument: "after" },
+	);
 }

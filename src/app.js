@@ -1,7 +1,11 @@
 import "dotenv/config";
 import express from "express";
 import jwt from "jsonwebtoken";
-import { findClicksByShortCode, recordClick } from "./analytics.js";
+import {
+	findClicksByShortCode,
+	recordClick,
+	summarizeClicksByShortCode,
+} from "./analytics.js";
 import { connectToMongoDb } from "./mongodb.js";
 import redisClient, { connectToRedis } from "./redis.js";
 import {
@@ -315,6 +319,31 @@ app.get(
 		return response.status(200).json({
 			clicks,
 		});
+	},
+);
+
+app.get(
+	"/api/urls/:id/analytics/summary",
+	authenticateRequest,
+	async (request, response) => {
+		const client = mongoClient ?? (await connectToMongoDb());
+		const url = await findUrlById(client, request.params.id);
+
+		if (!url) {
+			return response.status(404).json({
+				error: "URL not found.",
+			});
+		}
+
+		if (url.userId !== request.userId) {
+			return response.status(403).json({
+				error: "You do not own this URL.",
+			});
+		}
+
+		const summary = await summarizeClicksByShortCode(client, url.shortCode);
+
+		return response.status(200).json(summary);
 	},
 );
 

@@ -24,3 +24,34 @@ export async function findClicksByShortCode(client, shortCode) {
 		.sort({ clickedAt: -1 })
 		.toArray();
 }
+
+export async function summarizeClicksByShortCode(client, shortCode) {
+	const analytics = await getAnalyticsCollection(client);
+	const [summary] = await analytics
+		.aggregate([
+			{ $match: { shortCode } },
+			{
+				$group: {
+					_id: null,
+					totalClicks: { $sum: 1 },
+					lastClickedAt: { $max: "$clickedAt" },
+					ipAddresses: { $addToSet: "$ipAddress" },
+				},
+			},
+		])
+		.toArray();
+
+	if (!summary) {
+		return {
+			totalClicks: 0,
+			lastClickedAt: null,
+			uniqueIpAddresses: 0,
+		};
+	}
+
+	return {
+		totalClicks: summary.totalClicks,
+		lastClickedAt: summary.lastClickedAt,
+		uniqueIpAddresses: summary.ipAddresses.length,
+	};
+}

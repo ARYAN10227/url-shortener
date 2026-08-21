@@ -14,6 +14,7 @@ import {
 	generateShortCode,
 	findUrlByShortCode,
 	isValidHttpUrl,
+	isValidCustomAlias,
 } from "./url.js";
 
 const app = express();
@@ -171,7 +172,7 @@ app.get("/:shortCode", async (request, response) => {
 });
 
 app.post("/api/urls", authenticateRequest, async (request, response) => {
-	const { originalUrl } = request.body ?? {};
+	const { originalUrl, customAlias } = request.body ?? {};
 
 	if (!originalUrl || !isValidHttpUrl(String(originalUrl))) {
 		return response.status(400).json({
@@ -179,28 +180,44 @@ app.post("/api/urls", authenticateRequest, async (request, response) => {
 		});
 	}
 
+	if (customAlias !== undefined) {
+		if (!customAlias || !isValidCustomAlias(String(customAlias))) {
+			return response.status(400).json({
+				error: "customAlias must contain only letters, numbers, underscores, or hyphens.",
+			});
+		}
+	}
+
 	const client = mongoClient ?? (await connectToMongoDb());
 	const baseUrl = `${request.protocol}://${request.get("host")}`;
+	const shortCode = customAlias ? String(customAlias) : null;
+	const attempts = shortCode ? 1 : 5;
 
-	for (let attempt = 0; attempt < 5; attempt += 1) {
-		const shortCode = generateShortCode();
+	for (let attempt = 0; attempt < attempts; attempt += 1) {
+		const codeToUse = shortCode ?? generateShortCode();
 
 		try {
 			await createUrl(client, {
 				userId: request.userId,
 				originalUrl: String(originalUrl),
-				shortCode,
+				shortCode: codeToUse,
 			});
 
 			return response.status(201).json({
-				shortCode,
-				shortUrl: `${baseUrl}/${shortCode}`,
+				shortCode: codeToUse,
+				shortUrl: `${baseUrl}/${codeToUse}`,
 			});
 		} catch (error) {
 			if (error?.code !== 11000) {
 				console.error("URL creation failed:", error.message);
 				return response.status(500).json({
 					error: "URL creation failed.",
+				});
+			}
+
+			if (shortCode) {
+				return response.status(409).json({
+					error: "customAlias is already in use.",
 				});
 			}
 		}

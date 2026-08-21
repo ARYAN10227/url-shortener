@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 
 const SHORT_CODE_LENGTH = 8;
+const CUSTOM_ALIAS_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 export async function getUrlsCollection(client) {
 	const database = client.db();
@@ -22,6 +23,10 @@ export function isValidHttpUrl(value) {
 	} catch (error) {
 		return false;
 	}
+}
+
+export function isValidCustomAlias(value) {
+	return CUSTOM_ALIAS_PATTERN.test(value);
 }
 
 export async function createUrl(client, { userId, originalUrl, shortCode }) {

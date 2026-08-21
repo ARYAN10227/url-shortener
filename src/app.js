@@ -156,10 +156,32 @@ app.get("/api/auth/me", authenticateRequest, (request, response) => {
 });
 
 app.get("/api/urls", authenticateRequest, async (request, response) => {
+	const page = request.query.page === undefined ? 1 : Number(request.query.page);
+	const limit = request.query.limit === undefined ? 10 : Number(request.query.limit);
+
+	if (!Number.isInteger(page) || page < 1) {
+		return response.status(400).json({
+			error: "page must be a positive integer.",
+		});
+	}
+
+	if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+		return response.status(400).json({
+			error: "limit must be a positive integer no greater than 100.",
+		});
+	}
+
 	const client = mongoClient ?? (await connectToMongoDb());
-	const urls = await findUrlsByUserId(client, request.userId);
+	const { total, urls } = await findUrlsByUserId(client, request.userId, {
+		skip: (page - 1) * limit,
+		limit,
+	});
 
 	return response.status(200).json({
+		page,
+		limit,
+		total,
+		totalPages: Math.ceil(total / limit),
 		urls,
 	});
 });

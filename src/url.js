@@ -54,13 +54,20 @@ export async function findUrlByShortCode(client, shortCode) {
 	return urls.findOne({ shortCode });
 }
 
-export async function findUrlsByUserId(client, userId) {
+export async function findUrlsByUserId(client, userId, { skip, limit }) {
 	const urls = await getUrlsCollection(client);
+	const filter = { userId };
+	const [total, matchingUrls] = await Promise.all([
+		urls.countDocuments(filter),
+		urls
+			.find(filter)
+			.sort({ createdAt: -1 })
+			.skip(skip)
+			.limit(limit)
+			.toArray(),
+	]);
 
-	return urls
-		.find({ userId })
-		.sort({ createdAt: -1 })
-		.toArray();
+	return { total, urls: matchingUrls };
 }
 
 export async function findUrlById(client, id) {

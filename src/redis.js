@@ -5,6 +5,10 @@ const redisClient = createClient({
 });
 
 export async function connectToRedis() {
+	if (process.env.NODE_ENV === "production" && !process.env.REDIS_URL) {
+		throw new Error("REDIS_URL is not set.");
+	}
+
 	if (!redisClient.isOpen) {
 		await redisClient.connect();
 	}

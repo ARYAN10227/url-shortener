@@ -35,6 +35,8 @@ import {
 const app = express();
 const port = process.env.PORT ?? 3000;
 let mongoClient;
+let httpServer;
+let isShuttingDown = false;
 const REDIRECT_CACHE_TTL_SECONDS = 3600;
 
 app.disable("x-powered-by");
@@ -564,11 +566,66 @@ async function startServer() {
 		mongoClient = await connectToMongoDb();
 		await connectToRedis();
 
-		app.listen(port, () => {
-			console.log(`Server listening on port ${port}`);
+		httpServer = app.listen(port);
+		await new Promise((resolve, reject) => {
+			httpServer.once("listening", resolve);
+			httpServer.once("error", reject);
 		});
+		console.log(`Server listening on port ${port}`);
 	} catch (error) {
 		console.error("Server startup failed:", error.message);
+		await closeResources();
+		process.exit(1);
+	}
+}
+
+async function closeHttpServer() {
+	if (!httpServer || !httpServer.listening) {
+		return;
+	}
+
+	await new Promise((resolve, reject) => {
+		httpServer.close((error) => {
+			if (error) {
+				reject(error);
+				return;
+			}
+
+			resolve();
+		});
+	});
+}
+
+async function closeResources() {
+	try {
+		await closeHttpServer();
+	} finally {
+		try {
+			if (redisClient.isOpen) {
+				await redisClient.quit();
+			}
+		} finally {
+			if (mongoClient) {
+				await mongoClient.close();
+			}
+		}
+	}
+}
+
+async function shutdown(signal) {
+	if (isShuttingDown) {
+		return;
+	}
+
+	isShuttingDown = true;
+	console.log(`${signal} received. Shutting down gracefully.`);
+
+	try {
+		await closeResources();
+		console.log("Shutdown complete.");
+		process.exit(0);
+	} catch (error) {
+		console.error("Shutdown failed:", error.message);
 		process.exit(1);
 	}
 }
@@ -578,8 +635,9 @@ export function setMongoClient(client) {
 }
 
 if (process.env.NODE_ENV !== "test") {
+	process.once("SIGTERM", () => shutdown("SIGTERM"));
+	process.once("SIGINT", () => shutdown("SIGINT"));
 	startServer();
 }
 
 export { app };
-

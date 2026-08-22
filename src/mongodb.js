@@ -8,6 +8,12 @@ export async function connectToMongoDb() {
 	}
 
 	const client = new MongoClient(uri);
-	await client.connect();
-	return client;
+
+	try {
+		await client.connect();
+		return client;
+	} catch (error) {
+		await client.close();
+		throw error;
+	}
 }

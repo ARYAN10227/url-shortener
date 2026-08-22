@@ -573,6 +573,10 @@ async function startServer() {
 	}
 }
 
+export function setMongoClient(client) {
+	mongoClient = client;
+}
+
 if (process.env.NODE_ENV !== "test") {
 	startServer();
 }

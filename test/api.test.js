@@ -7,7 +7,7 @@ process.env.NODE_ENV = "test";
 process.env.MONGODB_URI = "mongodb://127.0.0.1:27017/url-shortener-test";
 process.env.JWT_SECRET = "test-secret";
 
-const { app } = await import("../src/app.js");
+const { app, setMongoClient } = await import("../src/app.js");
 const { default: redisClient, connectToRedis } = await import("../src/redis.js");
 
 const mongoClient = new MongoClient(process.env.MONGODB_URI);
@@ -15,8 +15,31 @@ const server = createServer(app);
 let baseUrl;
 let user;
 
+setMongoClient(mongoClient);
+
 async function request(path, options = {}) {
 	return fetch(`${baseUrl}${path}`, options);
+}
+
+async function closeServer() {
+	if (!server.listening) {
+		return;
+	}
+
+	const closed = new Promise((resolve, reject) => {
+		server.close((error) => {
+			if (error) {
+				reject(error);
+				return;
+			}
+
+			resolve();
+		});
+	});
+
+	server.closeIdleConnections();
+	server.closeAllConnections();
+	await closed;
 }
 
 async function createAuthenticatedUser() {
@@ -75,10 +98,17 @@ beforeEach(async () => {
 });
 
 after(async () => {
-	await server.close();
-	await redisClient.quit();
-	await mongoClient.db().dropDatabase();
-	await mongoClient.close();
+	await closeServer();
+
+	if (redisClient.isOpen) {
+		await redisClient.quit();
+	}
+
+	try {
+		await mongoClient.db().dropDatabase();
+	} finally {
+		await mongoClient.close();
+	}
 });
 
 describe("URL shortener API", () => {
